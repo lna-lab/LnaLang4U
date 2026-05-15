@@ -1,0 +1,13 @@
+{
+  "client": "OpenAI SDK",
+  "date": "2026-05-15",
+  "mode": "direct",
+  "api_surface": "openai_chat",
+  "status": "tested",
+  "model": "deepseek-v4-flash",
+  "tests": {
+    "models": "pass",
+    "chat_non_stream": "pass",
+    "chat_stream": "pass"
+  }
+}

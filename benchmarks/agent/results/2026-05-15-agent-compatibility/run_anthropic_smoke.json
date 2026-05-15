@@ -1,0 +1,16 @@
+{
+  "client": "Anthropic SDK / Claude Code",
+  "date": "2026-05-15",
+  "mode": "gateway",
+  "api_surface": "anthropic_messages",
+  "status": "experimental",
+  "model": "deepseek-v4-flash",
+  "tests": {
+    "models": "pass",
+    "messages_text": "pass",
+    "count_tokens": "approx",
+    "streaming": "todo",
+    "tool_use": "todo",
+    "long_context": "todo"
+  }
+}

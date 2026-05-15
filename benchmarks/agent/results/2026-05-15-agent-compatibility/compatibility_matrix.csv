@@ -1,0 +1,6 @@
+date,client,api_surface,endpoint,mode,status,model,streaming,tool_use,long_context,notes
+2026-05-15,OpenAI SDK,Chat Completions,/v1/chat/completions,direct,tested,deepseek-v4-flash,pass,n/a,n/a,"make smoke-openai passes"
+2026-05-15,OpenClaw,Chat Completions,/v1/chat/completions,direct,tested,deepseek-v4-flash,pass,n/a,n/a,"same endpoint as OpenAI SDK; direct SGLang"
+2026-05-15,Hermes Agent,Chat Completions,/v1/chat/completions,direct,tested,deepseek-v4-flash,pass,n/a,n/a,"OpenAI-compatible custom endpoint"
+2026-05-15,Claude Code,Anthropic Messages,/v1/messages,gateway,experimental,anthropic/deepseek-v4-flash,todo,todo,todo,"gateway translates to OpenAI; text-only tested"
+2026-05-15,Codex,Responses,/v1/responses,gateway,experimental,codex-lnalang4u,todo,todo,todo,"responses→chat translation tested"
