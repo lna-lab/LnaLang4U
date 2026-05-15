@@ -271,6 +271,25 @@ LnaLang4U is designed for **sequential or lightly concurrent inference** — the
 - **L3 offload activates during decode.** Once generation starts, sglang's HiCache can evict older KV pages to DRAM (L2) and SSD (L3), freeing GPU memory for the active decoding window.
 - **sglang's continuous batching** queues incoming requests automatically. Even with many concurrent users, the scheduler processes them sequentially through the prefill→decode pipeline.
 
+### OOM protection
+
+sglang provides built-in OOM guards that make the server safe for sequential long-context workloads:
+
+| Mechanism | What it does | Configure via |
+|-----------|-------------|---------------|
+| **Request queue** | Only `--max-running-requests` requests execute simultaneously; excess requests wait in FIFO queue. Prevents prefill pile-up. | `--max-running-requests` |
+| **KV pool limit** | Total KV cache allocation is capped by `--mem-fraction-static`. If a request's prefill would exceed the pool, it is rejected with a 503 status instead of crashing the server. | `--mem-fraction-static` |
+| **HiCache overflow** | When GPU KV pool fills, HiCache evicts older pages to DRAM (L2) and SSD (L3). The server never OOMs — it slows down gracefully as offload bandwidth becomes the bottleneck. | `--enable-hierarchical-cache`, `--hicache-ratio` |
+| **Per-request context limit** | Prompts exceeding `--context-length` are truncated or rejected. Prevents a single oversized request from consuming the entire pool. | `--context-length` |
+
+**What happens under load:**
+1. A long-context request arrives → prefill starts → KV pages allocated in GPU pool
+2. If pool is nearly full, HiCache evicts the oldest pages to L2/L3
+3. If pool is completely exhausted, the request is queued (503 Retry-After) — the server stays up
+4. Once decode finishes, KV pages are freed and the next request begins prefill
+
+This design ensures that **no single request can OOM the server**, and the system naturally backpressures under high load.
+
 ### Practical capacity
 
 | Setup | Result |
