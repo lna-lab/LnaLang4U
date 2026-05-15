@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Lna-Lab SM120 V4F Launch Script
-# Optane SSD 上のプロジェクトルート
+# Lna-Lab LnaLang4U unified launcher
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,9 +8,9 @@ MODEL_DIR="${SCRIPT_DIR}/models"
 usage() {
     echo "Usage: $0 {ds4-server|sglang|sglang-diskkv} [extra args...]"
     echo ""
-    echo "  ds4-server        — 軽量 GGUF サーバー (cuBLAS workaround 内蔵)"
+    echo "  ds4-server        — GGUF server with cuBLAS workaround"
     echo "  sglang            — FP8 4GPU sglang (SM120 kernel)"
-    echo "  sglang-diskkv     — FP8 + DiskOffload SSD KV cache (実験的)"
+    echo "  sglang-diskkv     — FP8 + DiskOffload SSD KV cache (experimental)"
     exit 1
 }
 
@@ -23,7 +22,7 @@ case "$MODE" in
         exec "${SCRIPT_DIR}/ds4-sm120/launch_server.sh" "$@"
         ;;
     sglang)
-        # 既存の LnaLab sglang launch (4GPU, FP8, SM120 kernel)
+        # standard LnaLab sglang launch (4GPU, FP8, SM120 kernel)
         if [[ ! -f "${MODEL_DIR}/DeepSeek-V4-Flash/config.json" ]] && \
            [[ ! -f "${MODEL_DIR}/DeepSeek-V4-Flash-FP8/config.json" ]]; then
             echo "ERROR: FP8 model not found. Expected at:"
@@ -31,11 +30,11 @@ case "$MODE" in
             echo "  or ${MODEL_DIR}/DeepSeek-V4-Flash-FP8/"
             exit 1
         fi
-        # Prefer sgl-project FP8 (274GB, true FP8), fall back to deepseek-ai (149GB, packed FP4)
+        # prefer sgl-project FP8 model; fall back to deepseek-ai FP4 model
         FP8_DIR="${MODEL_DIR}/DeepSeek-V4-Flash-FP8"
         [[ -f "${FP8_DIR}/config.json" ]] || FP8_DIR="${MODEL_DIR}/DeepSeek-V4-Flash"
 
-        # SM120 kernel のパス
+        # SM120 kernel path
         DSV4_BUILD_DIR="/media/tonoken/SN8100/repos/deepseek-v4-flash-sm120/build-docker"
         if [[ ! -f "${DSV4_BUILD_DIR}/deepseek_v4_kernel/cuda.cpython-312-x86_64-linux-gnu.so" ]]; then
             echo "Building SM120 kernel (one-time)..."

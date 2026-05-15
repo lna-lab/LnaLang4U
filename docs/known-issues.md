@@ -1,6 +1,6 @@
 # Known Issues
 
-This file documents known issues and unresolved technical challenges.
+> **Note:** This document tracks unresolved technical challenges during development. Some sections contain Japanese developer notes.
 
 # 未解決問題 — 2026-05-15 04:30 UTC
 
@@ -17,7 +17,7 @@ FP8_DIR="${MODEL_DIR}/DeepSeek-V4-Flash"
 [[ -f "${FP8_DIR}/config.json" ]] || FP8_DIR="${MODEL_DIR}/DeepSeek-V4-Flash-FP8"
 ```
 
-つまり、存在すれば 149GB の `deepseek-ai/DeepSeek-V4-Flash` を優先します。一方で Docker 起動環境には以下が固定されています。
+つまり、存在すれば 149GB の `deepseek-ai/DeepSeek-V4-Flash` を優先します。一方で Docker launch環境には以下が固定されています。
 
 ```bash
 -e SGLANG_DSV4_FP4_EXPERTS=0
@@ -55,7 +55,7 @@ RuntimeError: The size of tensor a (4096) must match the size of tensor b (2048)
 
 ### 重要な訂正
 
-`--moe-runner-backend triton` では `get_moe_runner_backend().is_triton_kernels()` は False です。したがって、この実行では `_load_w13()` の `self.use_triton_kernels` による transpose 分岐は本筋ではありません。
+`--moe-runner-backend triton` では `get_moe_runner_backend().is_triton_kernels()` は False です。したがって、この実行では `_load_w13()` の `self.use_triton_kernels` by transpose 分岐は本筋ではありません。
 
 そのため、次の作業は避けてください。
 
@@ -76,9 +76,9 @@ FP8_DIR="${MODEL_DIR}/DeepSeek-V4-Flash-FP8"
 [[ -f "${FP8_DIR}/config.json" ]] || FP8_DIR="${MODEL_DIR}/DeepSeek-V4-Flash"
 ```
 
-同じ修正を `sglang)` ブロックにも入れると、通常起動と DiskKV 起動でモデル差が消えて比較しやすくなります。
+同じ修正を `sglang)` ブロックにも入れると、通常launchと DiskKV launchでモデル差が消えて比較しやすくなります。
 
-確認:
+verify:
 
 ```bash
 cd /path/to/LnaLang4U
@@ -107,9 +107,9 @@ packed FP4 expert として読むなら:
 
 ただし、この経路は FP4 expert 用の追加前提に入るため、DiskKV の問題切り分けとしては遠回りです。まずは 274GB の `DeepSeek-V4-Flash-FP8` で HiCache/DiskOffload を進める方が安全です。
 
-### 形状確認コマンド
+### 形状verifyコマンド
 
-ローカルモデルは、次のコマンドでモデル実体を確認してから起動してください。
+ローカルモデルは、次のコマンドでモデル実体をverifyしてからlaunchしてください。
 
 ```bash
 docker run --rm \
@@ -148,9 +148,9 @@ logger.error(
 
 ただし、現時点では `layer.py` パッチより **モデル選択修正** が優先です。
 
-## 現在地: fused_moe_triton weight loader の transposed shard_dim 不整合
+## current state: fused_moe_triton weight loader の transposed shard_dim 不整合
 
-### エラー内容（deepseek-ai モデルで確認）
+### エラー内容（deepseek-ai モデルでverify）
 
 ```
 RuntimeError: The size of tensor a (4096) must match the size of tensor b (2048)
@@ -204,15 +204,15 @@ expert_data[0:256, :]  # shape [256, 4096] ← これに上記を copy_() しよ
    - `expert_data` は `[2, interm_size_pp, hidden_size]` (w13 combined, transposed)
    - 両者で次元の意味が異なる
 2. **ワークアラウンド**: 
-   - `--disable-cuda-graph` → 影響なしと確認済み
+   - `--disable-cuda-graph` → 影響なしとverify済み
    - `--moe-runner-backend` の指定変更で weight_loader のパスを変更できるか？
    - `SGLANG_DSV4_MODE=2601` と `2604` で weight loading パスが変わるか？
 
-### 確認済み動作環境（本件とは無関係に動作）
+### verify済み動作環境（本件とは無関係に動作）
 
 ```
 sglang + FP8 4GPU (HiCache なし): 正常動作 ✅
-→ 検証に使ったコマンド:
+→ validateに使ったコマンド:
   docker run --name sglang-dsv4-sm120 --gpus all \
     -e CUDA_VISIBLE_DEVICES=0,2,3,4 --shm-size=64g --ipc=host --network host \
     -v /path/to/model:/workspace/model:ro \
@@ -222,10 +222,10 @@ sglang + FP8 4GPU (HiCache なし): 正常動作 ✅
     (--fp8-gemm-backend triton --moe-runner-backend triton --attention-backend compressed ...)
 ```
 
-このベースラインでは `--enable-hierarchical-cache` なしで 393K context まで動作確認済み。
+このベースラインでは `--enable-hierarchical-cache` なしで 393K context まで動作verify済み。
 HiCache + DiskOffload 追加時にのみ weight loading が失敗する（上記の transposed shard_dim 問題）。
 
-## 直前の試行結果: P0 smoke test (2回目)
+## 直前のattempt結果: P0 smoke test (2回目)
 
 ### Codex パッチ適用状況
 
@@ -256,22 +256,22 @@ HiCache + DiskOffload 追加時にのみ weight loading が失敗する（上記
 - その後 `POST /generate 500 Internal Server Error` → scheduler 死亡の証拠
 - `Scheduler hit an exception` のログが **一切出力されない**
 
-### デバッグ試行一覧（全て失敗）
+### デバッグattempt一覧（全て失敗）
 
 | 方法 | 結果 |
 |------|------|
 | stdout/stderr 両方をファイルキャプチャ | scheduler の例外トレース無し |
 | `subprocess.Popen` monkeypatch | sglang は `mp.start_process()` (multiprocessing) を使用 |
 | `run_scheduler_process` に try/except + file write | パッチが子プロセスに伝播せず |
-| multiprocessing.BaseProcess.run の monkeypatch | プロセス起動前に monkeypatch が完了せず |
+| multiprocessing.BaseProcess.run の monkeypatch | プロセスlaunch前に monkeypatch が完了せず |
 | `--log-level DEBUG` | 追加情報なし |
-| `docker exec` でコンテナ内確認 | zombie `[python3] <defunct>` のみ確認 |
+| `docker exec` でコンテナ内verify | zombie `[python3] <defunct>` のみverify |
 | stderr ファイルリダイレクト (entrypoint bash -c) | 子プロセスの stderr は multiprocessing pipe 経由、ログに到達せず |
 
 ### 原因の推定
 
 scheduler 子プロセスは `mp.start_process()` (torch.multiprocessing または sglang fork) 
-で起動される。子プロセスの stderr は `multiprocessing.Process` の内部 pipe で
+でlaunchされる。子プロセスの stderr は `multiprocessing.Process` の内部 pipe で
 親プロセスに送られ、`logging` モジュールで出力される。
 
 しかし、scheduler の init が途中で **silent abort** (例外ではなく `sys.exit(0)`
@@ -292,13 +292,13 @@ scheduler 子プロセスは `mp.start_process()` (torch.multiprocessing また�
    - `sys.exit(0)` を仕込まれている可能性のある場所のリスト
    - または、`atexit` / `sys.excepthook` を使って終了原因をファイルに記録するブートストラップパッチ
 2. **`HostKVCache.__init__()` の assert line 188-189 の回避方法**
-   - DS4V の device_pool.size と host pool の size 計算が適切か確認
-   - `self.size > device_pool.size` の条件を DS4V で満たすための最小 `--hicache-size`
-3. **scheduler init の正常終了パス確認**
+   - DS4V の device_pool.size と host pool の size 計算が適切かverify
+   - `self.size > device_pool.size` の条件を DS4V で満たすfor最小 `--hicache-size`
+3. **scheduler init の正常終了パスverify**
    - `scheduler.py` の `init_cache_with_memory_pool` → `HiRadixCache.__init__` → 戻り
-   - その後どのメソッドが呼ばれるか確認
+   - その後どのメソッドが呼ばれるかverify
 
-### 検証コマンド (次回用)
+### validateコマンド (次回用)
 
 ```bash
 # P0 smoke test
