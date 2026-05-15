@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use LnaLang4U in your research, please cite this repository."
+authors:
+  - name: "Lna-Lab"
+    url: "https://github.com/lna-lab"
+title: "LnaLang4U: DeepSeek-V4-Flash 1M-Context Inference on Blackwell with SSD KV Cache Offload"
+version: 0.1.0
+date-released: 2026-05-15
+repository-code: "https://github.com/lna-lab/LnaLang4U"
+license: "TBD — see README"
+keywords:
+  - deepseek-v4-flash
+  - blackwell
+  - sglang
+  - kv-cache
+  - ssd-offload
+  - llm-inference

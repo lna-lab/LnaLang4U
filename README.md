@@ -1,126 +1,151 @@
-# LnaLang4U — DeepSeek-V4-Flash on Blackwell with SSD KV Cache Offload
+# LnaLang4U
 
-🚀 **First production-speed DeepSeek-V4-Flash inference with 1M context via SSD KV cache offload on NVIDIA Blackwell RTX PRO 6000.**
+> Production-speed DeepSeek-V4-Flash inference with 1M context on NVIDIA Blackwell, powered by sglang and SSD KV cache offload.
 
-## Achievement
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![CUDA](https://img.shields.io/badge/CUDA-Blackwell%20SM120-green)
+![Model](https://img.shields.io/badge/Model-DeepSeek--V4--Flash-purple)
+![Context](https://img.shields.io/badge/Context-1M%20tokens-orange)
+![Status](https://img.shields.io/badge/Status-research%20prototype-yellow)
 
-| Metric | Value |
-|--------|-------|
-| **Throughput** (single) | **63 tok/s** (284B model, FP8, TP=4) |
-| **Throughput** (8 concurrent) | **400 tok/s aggregate** |
-| **TTFT** | 125–212 ms |
-| **Context Length** | **1,048,576 tokens** (1M) |
-| **KV Cache** | L1 GPU → L2 DRAM → L3 **Optane SSD** |
-| **Hardware** | 4 × RTX PRO 6000 Blackwell (96 GB each, SM120) |
+## Highlights
+
+- **1,048,576-token context** — full 1M configuration
+- **63 tok/s** single-request throughput (100 tokens, CUDA Graphs ON)
+- **400 tok/s** aggregate at 8 concurrent requests (200 tokens each)
+- **125–212 ms** TTFT (warm run)
+- **4× RTX PRO 6000 Blackwell** (96 GB each, TP=4, SM120)
+- **GPU → DRAM → Optane SSD** hierarchical KV cache
+- Custom DeepSeek-V4 host pool, DiskOffload backend, and HiCache patches for sglang
+
+## Why this matters
+
+Long-context inference is limited by GPU memory. DeepSeek-V4-Flash's compressed MLA architecture reduces per-token KV storage, but at 1M context even compressed KV exceeds GPU capacity. SSD-backed KV cache offload makes long-context inference practical on local hardware, and Optane's low latency makes the L3 path usable for real-time decoding.
 
 ## Architecture
 
-```
-Client ──▶ sglang (port 9000)
-              │
-        ┌─────┴──────┐
-        │ SM120 Kernel │ (0xSero flash_mla sparse decode)
-        └─────┬──────┘
-              │
-    ┌─────────┴──────────┐
-    │  HiCache (L2 DRAM)  │
-    │                     │
- ┌──▼──────────────┐ ┌───▼──────────────┐
- │  GPU (L1, 87GB) │ │ DiskOffload (L3) │
- │  KV cache       │ │ Optane SSD pages │
- └─────────────────┘ └──────────────────┘
-```
+![LnaLang4U architecture](docs/assets/architecture.svg)
 
-## What We Built
+Three-tier KV cache hierarchy:
 
-Four custom components that extend sglang for DeepSeek-V4 on Blackwell:
-
-### 1. `DeepSeekV4TokenToKVPoolHost`
-Host-side (CPU DRAM) KV cache pool for DeepSeek-V4's compressed MLA architecture. Handles SWA, c4, c128, indexer, and compressor state sub-pools.
-
-### 2. `DiskOffloadBackend`
-L3 SSD storage backend implementing the `HiCacheStorage` interface:
-- Page-level `get`/`set`/`exists` with `torch.save`/`load`
-- Batch I/O (`batch_get`/`batch_set`/`batch_exists`)
-- LRU eviction with configurable disk budget (`SGLANG_DISK_OFFLOAD_MAX_SPACE_MB`)
-- JSON-based page index for persistence across restarts
-- Compatible with both v1 and v2 HiCache APIs
-
-### 3. `HiRadixCache` Patch
-Extended the Docker image's `HiRadixCache` with:
-- `sliding_window_size` for DS4V SWA support
-- `supports_swa()`, `full_evictable_size()`, `sanity_check()`
-- `dec_lock_ref(swa_uuid)` three-argument overload
-
-### 4. `hybrid_pool_assembler.py` Patch
-Added `build_dsv4_stack()` and DS4V detection branch in `attach_hybrid_pool_to_unified_cache()`.
-
-## Key Insight
-
-Everything runs on **Optane SSD** — model weights (274 GB FP8 checkpoint), KV cache pages, and OS. The low latency of Optane makes L3 disk offload practical for real-time inference.
-
-The `ds4-server` project inspired the SSD KV cache design (SHA-based content addressing, LRU eviction, budget management), while sglang provides the SM120-optimized inference engine.
+| Level | Medium | Capacity | Latency | Role |
+|-------|--------|----------|---------|------|
+| L1 | GPU HBM3 | ~12 GB | ~1 TB/s | Primary decode cache |
+| L2 | CPU DRAM | ~18 GB | ~20 GB/s | HiCache host pool |
+| L3 | Optane SSD | configurable | ~2.5 GB/s | DiskOffload backend |
 
 ## Performance
 
-### CUDA Graphs ON (production)
+The following figures are generated from machine-readable data in [`benchmarks/results`](benchmarks/results). See [`docs/benchmark.md`](docs/benchmark.md) for methodology.
 
-```
-200 tokens: 56.9–57.4 tok/s
-100 tokens: 62.8–63.0 tok/s (warm)
-  TTFT:    125–212 ms
-```
+### Throughput summary
 
-### Parallel Scaling (200 tokens each, CUDA Graphs ON)
+| Metric | Value | Notes |
+|---|---:|---|
+| Single-request throughput | 63 tok/s | 100-token output, CUDA Graphs ON, warm |
+| Single-request throughput | 57 tok/s | 200-token output, CUDA Graphs ON |
+| 2-concurrent aggregate | 107 tok/s | 1.9× scaling, 200 tokens each |
+| 4-concurrent aggregate | 215 tok/s | 3.9× scaling, 200 tokens each |
+| **8-concurrent aggregate** | **401 tok/s** | **7.2× scaling**, 200 tokens each |
+| TTFT (warm) | 125–212 ms | single request |
+| CUDA Graphs OFF baseline | 9.6 tok/s | 200 tokens; 6× below ON |
 
-| Concurrent | Aggregate TPS | Scaling vs 1 |
-|-----------|--------------|-------------|
-| 1 | 55.6 tok/s | 1.0× |
-| 2 | 107.1 tok/s | 1.9× |
-| 4 | 214.9 tok/s | 3.9× |
-| **8** | **400.7 tok/s** | **7.2×** |
+*All measurements on 4× RTX PRO 6000 Blackwell, TP=4, FP8. Throughput is output-token TPS.*
 
-sglang's continuous batching packs multiple decode requests into larger batches across 4 Blackwell GPUs, achieving near-linear scaling up to 8 concurrent requests.
+### Parallel scaling
 
-### CUDA Graphs OFF
+![Parallel scaling](docs/assets/parallel_scaling.svg)
 
-```
-200 tokens: 9.6 tok/s
-```
+sglang's continuous batching packs multiple decode requests into larger GPU batches. Scaling is near-linear up to 8 concurrent requests on this hardware.
 
-Enabling CUDA graphs gives a **6× throughput improvement**.
+### CUDA Graphs
 
-## Launch Commands
+![CUDA Graphs ON vs OFF](docs/assets/cuda_graphs_ablation.svg)
 
-### Baseline (no HiCache)
+CUDA Graphs are critical for production throughput. Without them, the overhead of repeated kernel launches reduces throughput by approximately 6×.
+
+### Single-request throughput
+
+![Single request throughput](docs/assets/single_request_throughput.svg)
+
+### TTFT
+
+![TTFT range](docs/assets/ttft_range.svg)
+
+## Quick start
+
+### Prerequisites
+
+- NVIDIA Blackwell GPU (RTX PRO 6000 or similar, SM120)
+- [Docker](https://docs.docker.com/) with NVIDIA Container Toolkit
+- [HuggingFace CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli)
+- Linux x86_64 host
+
+### 1. Download model weights
 
 ```bash
+huggingface-cli download sgl-project/DeepSeek-V4-Flash-FP8 \
+  --local-dir /path/to/models/DeepSeek-V4-Flash-FP8 \
+  --local-dir-use-symlinks False
+```
+
+### 2. Build the Docker image
+
+```bash
+export PROJECT_DIR=/path/to/LnaLang4U
+cd "$PROJECT_DIR"
+docker build -f sglang-diskkv/Dockerfile.sglang-dsv4 \
+  -t sglang-dsv4-diskkv:latest .
+```
+
+The build copies patched sglang files (host pool, HiRadixCache, DiskOffload) into the base sglang image. The SM120 flash_mla kernel is mounted at runtime.
+
+### 3. Launch (smoke test — 32K context)
+
+```bash
+export MODEL_DIR=/path/to/DeepSeek-V4-Flash-FP8
+export DISKKV_DIR=/path/to/diskkv
+export DSV4_KERNEL_DIR=/path/to/deepseek-v4-flash-sm120/build-docker
+
 docker run --name sglang-dsv4 --gpus all \
   -e CUDA_VISIBLE_DEVICES=0,2,3,4 \
   --shm-size=64g --ipc=host --network host \
-  -v /path/to/DeepSeek-V4-Flash-FP8:/workspace/model:ro \
-  -v /path/to/sm120-kernel:/dsv4:ro \
+  -v "$MODEL_DIR":/workspace/model:ro \
+  -v "$DSV4_KERNEL_DIR":/dsv4:ro \
+  -v "$DISKKV_DIR":/diskkv \
   -e PYTHONPATH=/dsv4 \
-  lmsysorg/sglang:deepseek-v4-blackwell \
+  -e SGLANG_DISK_OFFLOAD_DIR=/diskkv \
+  sglang-dsv4-diskkv:latest \
   python3 -m sglang.launch_server \
     --model-path /workspace/model --host 0.0.0.0 --port 9000 \
     --served-model-name deepseek-v4-flash --trust-remote-code \
-    --tensor-parallel-size 4 --context-length 393216 \
+    --tensor-parallel-size 4 --context-length 32768 \
     --mem-fraction-static 0.85 --kv-cache-dtype fp8_e4m3 \
-    --fp8-gemm-backend triton --moe-runner-backend triton \
-    --attention-backend compressed --page-size 256 \
-    --chat-template /sgl-workspace/sglang/examples/chat_template/tool_chat_template_deepseekv32.jinja
+    --fp8-gemm-backend triton --page-size 256 \
+    --enable-hierarchical-cache --hicache-ratio 1.25 \
+    --hicache-io-backend direct --hicache-mem-layout page_first \
+    --hicache-storage-backend disk_offload
 ```
 
-### 1M Context with HiCache + DiskOffload
+### 4. Test
 
 ```bash
+curl -s http://127.0.0.1:9000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-v4-flash","max_tokens":20,"messages":[{"role":"user","content":"hello"}]}'
+```
+
+### 5. Launch with 1M context
+
+```bash
+# Adjust mem-fraction-static to leave room for larger KV cache
+# Increase shm-size for host pool allocation
 docker run --name sglang-dsv4 --gpus all \
   -e CUDA_VISIBLE_DEVICES=0,2,3,4 \
   --shm-size=128g --ipc=host --network host \
-  -v /path/to/DeepSeek-V4-Flash-FP8:/workspace/model:ro \
-  -v /path/to/sm120-kernel:/dsv4:ro \
-  -v /path/to/diskkv:/diskkv \
+  -v "$MODEL_DIR":/workspace/model:ro \
+  -v "$KERNEL_DIR":/dsv4:ro \
+  -v "$DISKKV_DIR":/diskkv \
   -e PYTHONPATH=/dsv4 \
   -e SGLANG_DISK_OFFLOAD_DIR=/diskkv \
   -e SGLANG_DISK_OFFLOAD_MAX_SPACE_MB=1048576 \
@@ -130,77 +155,86 @@ docker run --name sglang-dsv4 --gpus all \
     --served-model-name deepseek-v4-flash --trust-remote-code \
     --tensor-parallel-size 4 --context-length 1048576 \
     --mem-fraction-static 0.80 --kv-cache-dtype fp8_e4m3 \
-    --fp8-gemm-backend triton --moe-runner-backend triton \
-    --page-size 256 \
+    --fp8-gemm-backend triton --page-size 256 \
     --enable-hierarchical-cache --hicache-ratio 1.5 \
     --hicache-io-backend direct --hicache-mem-layout page_first \
     --hicache-storage-backend disk_offload
 ```
 
-## Build Custom Image
+## Reproducibility
 
-```bash
-cd /path/to/project
-docker build -f sglang-diskkv/Dockerfile.sglang-dsv4 -t sglang-dsv4-diskkv:latest .
+See [`docs/reproducibility.md`](docs/reproducibility.md) for:
+- Exact hardware configuration
+- Software versions (Docker image, CUDA, driver, PyTorch)
+- Benchmark methodology
+- Expected output validation
+- How to verify DiskOffload is active
+
+## Project structure
+
+```
+LnaLang4U/
+├── README.md                       # This file
+├── launch.sh                       # Unified launcher
+├── Lang4-sm120/                    # GGUF server (separate track)
+├── sglang-diskkv/                  # Core implementation
+│   ├── hiradix_cache_patched.py    # Patched HiRadixCache for DS4V
+│   ├── Dockerfile.sglang-dsv4      # Docker image build
+│   ├── sglang-source/              # Vendored sglang (patched files)
+│   │   └── python/sglang/srt/mem_cache/
+│   │       ├── deepseek_v4_memory_pool_host.py  # DS4V host pool
+│   │       ├── storage/disk_offload/            # DiskOffloadBackend
+│   │       └── hybrid_cache/hybrid_pool_assembler.py
+│   ├── DESIGN.md
+│   └── RUN_INFERENCE.md
+├── benchmarks/                     # Benchmark data and scripts
+│   ├── README.md
+│   ├── results/                    # Raw CSV data
+│   ├── scripts/                    # Graph generation
+│   └── prompts/                    # Prompt templates
+└── docs/                           # Documentation
+    ├── architecture.md
+    ├── benchmark.md
+    ├── reproducibility.md
+    ├── troubleshooting.md
+    └── assets/                     # Generated figures
 ```
 
-## Project Structure
+## Documentation
 
-```
-Sm120-LNALAB-V4F/
-├── launch.sh                          # Unified launcher
-├── models/                            # Model symlinks
-├── diskkv/                            # DiskOffloadBackend storage
-├── patch_scheduler.py                 # Debug helper
-├── Dockerfile.debug                   # Debug build
-└── sglang-diskkv/
-    ├── DESIGN.md
-    ├── Dockerfile.sglang-dsv4         # Production Dockerfile
-    ├── hiradix_cache_patched.py       # Patched HiRadixCache
-    ├── UNRESOLVED.md
-    └── sglang-source/
-        └── python/sglang/srt/mem_cache/
-            ├── deepseek_v4_memory_pool_host.py  # DS4V host pool
-            ├── storage/disk_offload/            # DiskOffloadBackend
-            │   └── disk_offload_backend.py
-            └── hybrid_cache/
-                └── hybrid_pool_assembler.py     # DS4V branch
-```
+| Document | Description |
+|----------|-------------|
+| [`docs/architecture.md`](docs/architecture.md) | KV cache hierarchy design |
+| [`docs/benchmark.md`](docs/benchmark.md) | Benchmark methodology and data |
+| [`docs/reproducibility.md`](docs/reproducibility.md) | Hardware, software, validation |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common issues and fixes |
+| [`sglang-diskkv/DESIGN.md`](sglang-diskkv/DESIGN.md) | Implementation design notes |
+| [`sglang-diskkv/RUN_INFERENCE.md`](sglang-diskkv/RUN_INFERENCE.md) | Detailed inference guide |
 
-## Model Weights
+## Known limitations
 
-The FP8 checkpoint is available on HuggingFace:
+- **Hardware-specific.** Tested on 4× RTX PRO 6000 Blackwell (SM120). Other Blackwell configurations may require tuning.
+- **CUDA Graphs required for production throughput.** Without CUDA Graphs, throughput drops ~6×.
+- **DiskOffload performance depends on SSD latency.** Optane-class storage is recommended.
+- **1M-context path requires careful memory tuning.** Adjust `mem-fraction-static`, `hicache-ratio`, and `max-running-requests` for your hardware.
+- **FP8 model format required.** The 274 GB `sgl-project/DeepSeek-V4-Flash-FP8` checkpoint is the recommended model. The 149 GB FP4-packed version (`deepseek-ai/DeepSeek-V4-Flash`) requires `SGLANG_DSV4_FP4_EXPERTS=1`.
+- **HiCache storage backend is experimental.** The DiskOffload L3 path is functional but not yet optimized for production latency.
 
-- **Primary (recommended):** [`sgl-project/DeepSeek-V4-Flash-FP8`](https://huggingface.co/sgl-project/DeepSeek-V4-Flash-FP8) (274 GB, true FP8)
-- **Alternative:** [`deepseek-ai/DeepSeek-V4-Flash`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) (149 GB, packed FP4 — requires `SGLANG_DSV4_FP4_EXPERTS=1`)
+## Roadmap
 
-Download:
-
-```bash
-# 274 GB FP8 version (recommended)
-huggingface-cli download sgl-project/DeepSeek-V4-Flash-FP8 \
-  --local-dir /path/to/models/DeepSeek-V4-Flash-FP8 \
-  --local-dir-use-symlinks False
-```
-
-The model path is mounted into the container at `/workspace/model:ro`. Set `MODEL_DIR` environment variable or create a symlink in `models/DeepSeek-V4-Flash-FP8`.
-
-## Prerequisites
-
-- [Docker](https://docs.docker.com/) with NVIDIA Container Toolkit
-- [HuggingFace CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli) for model download
-- NVIDIA Blackwell GPU (RTX PRO 6000 or similar, SM120)
-- SM120 kernel (auto-built by `launch.sh`)
-
-## Known Issues
-
-- The Docker image's `HiRadixCache` requires multiple compatibility patches for DS4V (sliding_window_size, supports_swa, sanity_check, dec_lock_ref)
-- `DiskOffloadBackend` L3 eviction works automatically when L2 is full; with `--hicache-ratio 1.5` and short contexts, L2 is usually sufficient
-- FP4-packed experts (149 GB model) require `SGLANG_DSV4_FP4_EXPERTS=1`; our setup uses the true-FP8 274 GB model
+- **Near term:** Expand benchmark data with raw logs, add context-length sweep results.
+- **Medium term:** Async I/O for DiskOffload (io_uring), page compression, better eviction policies.
+- **Long term:** Upstream HiCache DS4V support to sglang, contribute DiskOffload as a storage backend.
 
 ## Credits
 
-- **sglang** project for the inference engine and SM120 support
-- **0xSero** for the SM120 flash_mla kernel
-- **[antirez/ds4](https://github.com/antirez/ds4)** — the original DwarfStar 4 server. The SSD KV cache offload design (`--kv-disk-dir`, SHA-based content addressing, LRU eviction, cold/continued/evict save strategies) is a direct homage to this brilliant project. Thank you, Salvatore! 🙌
-- Built with ❤️ at Lna-Lab
+- [sglang](https://github.com/sgl-project/sglang) — inference engine with SM120 support
+- [0xSero/deepseek-v4-flash-sm120](https://github.com/0xSero/deepseek-v4-flash-sm120) — SM120 flash_mla kernel
+- [antirez/ds4](https://github.com/antirez/ds4) — DwarfStar 4 server, the inspiration for SSD KV cache offload
+- [DeepSeek](https://deepseek.com/) — model architecture and training
+
+Built at [Lna-Lab](https://lna-lab.com).
+
+## License
+
+License information will be added after maintainer confirmation.

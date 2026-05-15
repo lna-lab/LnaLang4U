@@ -1,0 +1,40 @@
+benchmark_id: "2026-05-15-blackwell-4x-rtx-pro-6000"
+date: 2026-05-15
+repository: lna-lab/LnaLang4U
+git_commit: "TBD — set after final commit"
+docker_image: "sglang-dsv4-diskkv:latest"
+sglang_base_image: "lmsysorg/sglang:deepseek-v4-blackwell"
+model:
+  name: "DeepSeek-V4-Flash"
+  checkpoint: "sgl-project/DeepSeek-V4-Flash-FP8"
+  dtype: "FP8"
+  checkpoint_size_gb: 274
+hardware:
+  gpu_model: "NVIDIA RTX PRO 6000 Blackwell"
+  gpu_count: 4
+  vram_gb_each: 96
+  tensor_parallel_size: 4
+  cpu: "AMD Ryzen Threadripper"
+  ram_gb: 128
+  storage:
+    type: "Optane SSD"
+    model: "Intel Optane SSD 905P"
+    filesystem: "ext4"
+software:
+  os: "Ubuntu 24.04.4 LTS"
+  nvidia_driver: "595.58.03"
+  cuda: "13.2 (driver) / 12.9.1 (runtime)"
+  python: "3.12"
+  pytorch: "TBD"
+runtime:
+  context_length: 1048576
+  kv_cache_dtype: "fp8_e4m3"
+  page_size: 256
+  hicache_ratio: 1.5
+  disk_offload_max_space_mb: 1048576
+  cuda_graphs: true
+notes:
+  - "Single-request numbers are from short-prompt runs (prompt=5-14 tokens)"
+  - "Parallel scaling tested with 200 output tokens each"
+  - "CUDA Graphs ON is the production path; OFF gives ~6x lower throughput"
+  - "Replace summary-only fields with raw log data when available"

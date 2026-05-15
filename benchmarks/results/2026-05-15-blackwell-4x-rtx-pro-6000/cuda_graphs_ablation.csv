@@ -1,0 +1,3 @@
+run_id,date,source,output_tokens,cuda_graphs,tps_min,tps_max,tps_mean,speedup_vs_off,notes
+cuda_graphs_on_200,2026-05-15,measured,200,true,56.9,57.4,57.2,6.0,"production path — CUDA Graphs ON"
+cuda_graphs_off_200,2026-05-15,measured,200,false,9.6,9.6,9.6,1.0,"baseline — CUDA Graphs OFF. Disable-cuda-graph flag used."

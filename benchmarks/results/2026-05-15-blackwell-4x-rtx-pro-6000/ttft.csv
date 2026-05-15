@@ -1,0 +1,2 @@
+run_id,date,source,scenario,context_length,output_tokens,concurrency,ttft_ms_min,ttft_ms_max,notes
+ttft_summary,2026-05-15,measured,single_request,32768,100,1,125,212,"range from 3 warm runs. Run 1: 318ms (cold), runs 2-3: 125-128ms. Summary shows warm range."

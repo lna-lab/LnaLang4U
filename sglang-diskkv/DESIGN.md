@@ -1,9 +1,14 @@
 # DiskOffload: SSD KV Cache Backend for sglang
 
-## Goal
-sglang の L3 ストレージバックエンドとして、ローカル SSD に KV cache を退避する機構を実装する。
-ds4-server の `--kv-disk-dir` + `--kv-disk-space-mb` と同等の機能を sglang 上で実現し、
-1GPU・1M context の推論を OOM せず実行可能にする。
+> **Status:** Implemented prototype used by LnaLang4U benchmark runs. Some optimization phases remain experimental.
+
+## Original goal
+
+Implement an SSD-backed L3 storage backend for sglang HiCache, inspired by d4-server's `--kv-disk-dir` + `--kv-disk-space-mb`. Enable 1M-context inference without OOM by offloading KV cache pages to local SSD.
+
+## Current implementation
+
+The prototype runs on **4 GPUs** with sglang for production throughput, while the SSD KV cache offload design remains faithful to the original single-GPU concept. See the [root README](../README.md) for current capabilities and [docs/architecture.md](../docs/architecture.md) for design details.
 
 ## Architecture
 
@@ -16,6 +21,8 @@ sglang ModelRunner
 
 HiCache 既存の3層構造のうち、L3 層に `disk_offload` バックエンドを追加する。
 データパス: `GPU → CPU (L2) → Disk (L3, 新規)`
+
+> **Status:** Implemented prototype. See the [root README](../README.md) for current capabilities.
 
 ## Interface
 

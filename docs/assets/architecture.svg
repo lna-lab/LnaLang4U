@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="gpu" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2ecc71"/><stop offset="100%" stop-color="#27ae60"/></linearGradient>
+    <linearGradient id="dram" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3498db"/><stop offset="100%" stop-color="#2980b9"/></linearGradient>
+    <linearGradient id="ssd" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e67e22"/><stop offset="100%" stop-color="#d35400"/></linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#2c3e50">LnaLang4U — KV Cache Hierarchy</text>
+
+  <!-- L1: GPU -->
+  <rect x="60" y="55" width="200" height="130" rx="10" fill="url(#gpu)" opacity="0.9"/>
+  <text x="160" y="100" text-anchor="middle" font-size="16" font-weight="bold" fill="white">GPU L1 Cache</text>
+  <text x="160" y="122" text-anchor="middle" font-size="12" fill="white" opacity="0.9">HBM3 — 87 GiB</text>
+  <text x="160" y="140" text-anchor="middle" font-size="11" fill="white" opacity="0.8">~12 GB KV cache</text>
+  <text x="160" y="158" text-anchor="middle" font-size="11" fill="white" opacity="0.8">(4× RTX PRO 6000)</text>
+  <text x="160" y="176" text-anchor="middle" font-size="10" fill="white" opacity="0.7">~50 GB/s</text>
+
+  <!-- Arrow GPU → DRAM -->
+  <line x1="260" y1="120" x2="320" y2="120" stroke="#7f8c8d" stroke-width="2"/>
+  <polygon points="315,114 325,120 315,126" fill="#7f8c8d"/>
+
+  <!-- L2: DRAM -->
+  <rect x="330" y="55" width="200" height="130" rx="10" fill="url(#dram)" opacity="0.9"/>
+  <text x="430" y="100" text-anchor="middle" font-size="16" font-weight="bold" fill="white">DRAM L2 Cache</text>
+  <text x="430" y="122" text-anchor="middle" font-size="12" fill="white" opacity="0.9">CPU RAM — 128 GiB</text>
+  <text x="430" y="140" text-anchor="middle" font-size="11" fill="white" opacity="0.8">~18 GB KV cache (1.5×)</text>
+  <text x="430" y="158" text-anchor="middle" font-size="11" fill="white" opacity="0.8">HiCache host pool</text>
+  <text x="430" y="176" text-anchor="middle" font-size="10" fill="white" opacity="0.7">~20 GB/s</text>
+
+  <!-- Arrow DRAM → SSD -->
+  <line x1="530" y1="120" x2="590" y2="120" stroke="#7f8c8d" stroke-width="2"/>
+  <polygon points="585,114 595,120 585,126" fill="#7f8c8d"/>
+
+  <!-- L3: SSD -->
+  <rect x="600" y="55" width="170" height="130" rx="10" fill="url(#ssd)" opacity="0.9"/>
+  <text x="685" y="100" text-anchor="middle" font-size="16" font-weight="bold" fill="white">SSD L3 Cache</text>
+  <text x="685" y="122" text-anchor="middle" font-size="12" fill="white" opacity="0.9">Optane NVMe</text>
+  <text x="685" y="140" text-anchor="middle" font-size="11" fill="white" opacity="0.8">DiskOffloadBackend</text>
+  <text x="685" y="158" text-anchor="middle" font-size="11" fill="white" opacity="0.8">LRU eviction</text>
+  <text x="685" y="176" text-anchor="middle" font-size="10" fill="white" opacity="0.7">~2.5 GB/s</text>
+
+  <!-- Software stack -->
+  <rect x="60" y="220" width="710" height="90" rx="8" fill="#f5f6fa" stroke="#bdc3c7" stroke-width="1.5"/>
+  <text x="415" y="248" text-anchor="middle" font-size="14" font-weight="bold" fill="#2c3e50">Software Stack</text>
+  <text x="160" y="275" text-anchor="middle" font-size="11" fill="#34495e">sglang inference server</text>
+  <text x="350" y="275" text-anchor="middle" font-size="11" fill="#34495e">SM120 flash_mla kernel</text>
+  <text x="540" y="275" text-anchor="middle" font-size="11" fill="#34495e">DeepSeek-V4 host pool</text>
+  <text x="720" y="275" text-anchor="middle" font-size="11" fill="#34495e">HiCache + DiskOffload</text>
+
+  <!-- Performance callout -->
+  <rect x="160" y="335" width="480" height="80" rx="8" fill="#fff" stroke="#3498db" stroke-width="2" stroke-dasharray="5,3"/>
+  <text x="400" y="362" text-anchor="middle" font-size="13" font-weight="bold" fill="#2c3e50">1,048,576-token context length</text>
+  <text x="400" y="382" text-anchor="middle" font-size="12" fill="#34495e">63 tok/s single-request · 400 tok/s @ 8 concurrent</text>
+  <text x="400" y="400" text-anchor="middle" font-size="11" fill="#7f8c8d">CUDA Graphs ON · FP8 · 4× RTX PRO 6000 Blackwell · TP=4</text>
+
+  <text x="400" y="460" text-anchor="middle" font-size="10" fill="#95a5a6">LnaLang4U — github.com/lna-lab/LnaLang4U</text>
+</svg>

@@ -1,97 +1,78 @@
-# 推論起動手順
+# Running Inference
 
-## 1. イメージをビルド
+## Prerequisites
 
-```bash
-cd /media/tonoken/Optane_DATA/Sm120-LNALAB-V4F
-docker build \
-  -f sglang-diskkv/Dockerfile.sglang-dsv4 \
-  -t sglang-dsv4-diskkv:latest \
-  .
-```
-
-## 2. まず短い context で起動
+Before starting, run these checks:
 
 ```bash
-cd /media/tonoken/Optane_DATA/Sm120-LNALAB-V4F
-CONTEXT_LENGTH=32768 \
-HICACHE_RATIO=1.25 \
-DISKKV_MB=65536 \
-GPUS=0,2,3,4 \
-PORT=9000 \
-./launch.sh sglang-diskkv
+nvidia-smi                               # verify GPUs are available
+docker --version                         # verify Docker
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi  # verify GPU access
+df -h /path/to/diskkv                    # verify disk space for KV cache
 ```
 
-重要な起動オプションは `launch.sh` 側で入ります。
+## 1. Build the image
 
 ```bash
---enable-hierarchical-cache
---hicache-io-backend direct
---hicache-mem-layout page_first
---hicache-storage-backend disk_offload
+export PROJECT_DIR=/path/to/LnaLang4U
+cd "$PROJECT_DIR"
+docker build -f sglang-diskkv/Dockerfile.sglang-dsv4 \
+  -t sglang-dsv4-diskkv:latest .
 ```
 
-ログに以下が出れば、今回のパッチが使われています。
+## 2. Launch tiers
 
-```text
-Initialized DeepSeek-V4 host pool
-DiskOffloadBackend: dir=/diskkv
-```
-
-## 3. 疎通確認
-
-別ターミナルで:
+### Tier 1: Smoke test (32K context)
 
 ```bash
-curl -s http://127.0.0.1:9000/v1/models
+export MODEL_DIR=/path/to/DeepSeek-V4-Flash-FP8
+export DISKKV_DIR=/path/to/diskkv
+export DSV4_KERNEL_DIR=/path/to/deepseek-v4-flash-sm120/build-docker
+
+docker run --name sglang-dsv4 --gpus all \
+  -e CUDA_VISIBLE_DEVICES=0,2,3,4 \
+  --shm-size=64g --ipc=host --network host \
+  -v "$MODEL_DIR":/workspace/model:ro \
+  -v "$DSV4_KERNEL_DIR":/dsv4:ro \
+  -v "$DISKKV_DIR":/diskkv \
+  -e PYTHONPATH=/dsv4 \
+  -e SGLANG_DISK_OFFLOAD_DIR=/diskkv \
+  -e SGLANG_DISK_OFFLOAD_MAX_SPACE_MB=65536 \
+  sglang-dsv4-diskkv:latest \
+  python3 -m sglang.launch_server \
+    --model-path /workspace/model --host 0.0.0.0 --port 9000 \
+    --served-model-name deepseek-v4-flash --trust-remote-code \
+    --tensor-parallel-size 4 --context-length 32768 \
+    --mem-fraction-static 0.85 --kv-cache-dtype fp8_e4m3 \
+    --fp8-gemm-backend triton --page-size 256 \
+    --enable-hierarchical-cache --hicache-ratio 1.25 \
+    --hicache-io-backend direct --hicache-mem-layout page_first \
+    --hicache-storage-backend disk_offload
 ```
 
-推論:
+### Tier 2: Medium context (393K)
+
+Increase `--context-length 393216` and `--max-running-requests 8`.
+
+### Tier 3: Full 1M context
 
 ```bash
-curl -s http://127.0.0.1:9000/generate \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "text": "Hello, introduce yourself in one sentence.",
-    "sampling_params": {
-      "max_new_tokens": 32,
-      "temperature": 0
-    }
-  }'
+  -e SGLANG_DISK_OFFLOAD_MAX_SPACE_MB=1048576 \
+  ...
+  --context-length 1048576 --mem-fraction-static 0.80 \
+  --hicache-ratio 1.5
 ```
 
-## 4. DiskOffload 確認
+## 3. Test
 
 ```bash
-find /media/tonoken/Optane_DATA/Sm120-LNALAB-V4F/diskkv -maxdepth 2 -type f | head
-du -sh /media/tonoken/Optane_DATA/Sm120-LNALAB-V4F/diskkv
+curl -s http://127.0.0.1:9000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-v4-flash","max_tokens":20,"messages":[{"role":"user","content":"hello"}]}'
 ```
 
-`index.json` と `pages/*.pt` が増えれば、L3 への退避が動いています。
+Expected: HTTP 200 with a coherent response.
 
-## 5. 長い context へ段階的に上げる
+## Troubleshooting
 
-短い context の推論が通ってから:
-
-```bash
-CONTEXT_LENGTH=393216 \
-HICACHE_RATIO=1.5 \
-DISKKV_MB=524288 \
-GPUS=0,2,3,4 \
-PORT=9000 \
-./launch.sh sglang-diskkv
-```
-
-1M context は最後に:
-
-```bash
-CONTEXT_LENGTH=1048576 \
-MEM_FRACTION_STATIC=0.80 \
-HICACHE_RATIO=1.25 \
-DISKKV_MB=1048576 \
-GPUS=0,2,3,4 \
-PORT=9000 \
-./launch.sh sglang-diskkv
-```
-
-失敗時は `LOCAL_MODEL_HANDOFF.md` の P0/P1 チェックリストに沿ってログを取ってください。
+See [`docs/troubleshooting.md`](../docs/troubleshooting.md) for common issues.

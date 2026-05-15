@@ -1,3 +1,7 @@
+# Known Issues
+
+This file documents known issues and unresolved technical challenges.
+
 # 未解決問題 — 2026-05-15 04:30 UTC
 
 ## Codex フォローアップ — 2026-05-15 12:16 JST

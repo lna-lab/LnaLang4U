@@ -1,0 +1,5 @@
+run_id,date,source,concurrency,output_tokens_each,cuda_graphs,aggregate_tps,scaling_vs_1,per_request_tps_mean,notes
+parallel_1,2026-05-15,measured,1,200,true,55.6,1.0,55.6,"baseline single-request throughput"
+parallel_2,2026-05-15,measured,2,200,true,107.1,1.9,53.6,"near-linear scaling"
+parallel_4,2026-05-15,measured,4,200,true,214.9,3.9,53.7,"near-linear scaling"
+parallel_8,2026-05-15,measured,8,200,true,400.7,7.2,50.1,"slight per-request drop at 8 concurrent; aggregate still scales"
