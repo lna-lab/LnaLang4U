@@ -1,0 +1,32 @@
+FROM lmsysorg/sglang:deepseek-v4-blackwell
+
+COPY sglang-diskkv/sglang-source/python/sglang/srt/mem_cache/deepseek_v4_memory_pool_host.py \
+     /workspace/sglang/python/sglang/srt/mem_cache/deepseek_v4_memory_pool_host.py
+COPY sglang-diskkv/hiradix_cache_patched.py \
+     /workspace/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+COPY sglang-diskkv/sglang-source/python/sglang/srt/mem_cache/storage/backend_factory.py \
+     /workspace/sglang/python/sglang/srt/mem_cache/storage/backend_factory.py
+COPY sglang-diskkv/sglang-source/python/sglang/srt/mem_cache/storage/disk_offload \
+     /workspace/sglang/python/sglang/srt/mem_cache/storage/disk_offload
+
+RUN python3 - <<'PY'
+import re
+from pathlib import Path
+
+p = Path("/workspace/sglang/python/sglang/srt/server_args.py")
+s = p.read_text()
+if '"disk_offload"' not in s:
+    # Only modify the --hicache-storage-backend choices list, not other occurrences
+    old_choices = '["file", "mooncake", "hf3fs", "nixl", "aibrix", "dynamic", "eic"]'
+    new_choices = '["file", "mooncake", "hf3fs", "nixl", "aibrix", "dynamic", "eic", "disk_offload"]'
+    if old_choices in s:
+        s = s.replace(old_choices, new_choices, 1)
+        s = s.replace(
+            "Built-in backends: file, mooncake, hf3fs, nixl, aibrix.",
+            "Built-in backends: file, mooncake, hf3fs, nixl, aibrix, disk_offload.",
+        )
+p.write_text(s)
+print("server_args.py patched OK")
+PY
+
+WORKDIR /workspace/sglang

@@ -1,0 +1,33 @@
+# Model symlinks and data
+models/
+diskkv/
+
+# sglang vendored source — keep only what we patch
+sglang-diskkv/sglang-source/.git/
+sglang-diskkv/sglang-source/test/
+sglang-diskkv/sglang-source/benchmark/
+sglang-diskkv/sglang-source/docs/
+sglang-diskkv/sglang-source/docs_new/
+sglang-diskkv/sglang-source/examples/
+sglang-diskkv/sglang-source/assets/
+sglang-diskkv/sglang-source/3rdparty/
+sglang-diskkv/sglang-source/**/__pycache__/
+sglang-diskkv/sglang-source/**/*.so
+sglang-diskkv/sglang-source/**/*.pyc
+sglang-diskkv/sglang-source/*.toml
+
+# ds4-sm120 build artifacts
+ds4-sm120/*.o
+ds4-sm120/ds4
+ds4-sm120/ds4-server
+ds4-sm120/ds4-bench
+ds4-sm120/gguf/*.gguf
+ds4-sm120/kv-cache/
+
+# Debug artifacts
+patch_scheduler.py
+Dockerfile.debug
+
+# OS files
+.DS_Store
+Thumbs.db
