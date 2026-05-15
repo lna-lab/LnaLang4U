@@ -28,6 +28,10 @@ ds4-sm120/kv-cache/
 patch_scheduler.py
 Dockerfile.debug
 
+# Python cache
+__pycache__/
+*.pyc
+
 # OS files
 .DS_Store
 Thumbs.db
