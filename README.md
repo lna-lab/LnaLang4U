@@ -3,6 +3,7 @@
 > Production-ready DeepSeek-V4-Flash inference server with 1M context on NVIDIA Blackwell.
 > Dual API: OpenAI-compatible and Anthropic-compatible endpoints.
 > SSD KV cache offload for long-context inference.
+> **Turn your local Blackwell machine into a 1M-context coding-agent backend.**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![CUDA](https://img.shields.io/badge/CUDA-Blackwell%20SM120-green)
@@ -11,13 +12,28 @@
 ![API](https://img.shields.io/badge/API-OpenAI%20%7C%20Anthropic-blue)
 ![License](https://img.shields.io/badge/License-TBD-lightgrey)
 
+## Agent compatibility
+
+LnaLang4U is designed to run as a local 1M-context backend for modern coding agents.
+
+| Client | API surface | Status | Path |
+|--------|------------|--------|------|
+| OpenAI SDK | Chat Completions | ✅ Tested | Direct SGLang endpoint |
+| OpenClaw | OpenAI-compatible Chat Completions | ✅ Tested | Direct SGLang endpoint |
+| Hermes Agent | OpenAI-compatible Custom Endpoint | ✅ Tested | Direct SGLang endpoint |
+| Claude Code | Anthropic Messages API | 🧪 Experimental | LnaLang4U Gateway |
+| Codex | OpenAI Responses API | 🧪 Experimental | LnaLang4U Gateway |
+
+> **Bring your agent. Use LnaLang4U as the local long-context brain.**
+
+See [`docs/agent-compatibility.md`](docs/agent-compatibility.md) for details.
+
 ## API Compatibility
 
 | API | Endpoint | How |
 |-----|----------|-----|
 | **OpenAI** | `/v1/chat/completions` | Native (sglang) |
 | **Anthropic** | `/v1/messages` | Built-in translation proxy |
-| **Claude Code CLI** | `ANTHROPIC_BASE_URL=http://<host>:9001` | Proxy translates transparently |
 
 Both APIs support streaming, tool calls, and all standard parameters. Use your existing OpenAI or Anthropic client libraries — point them at LnaLang4U and it works.
 
@@ -235,8 +251,25 @@ LnaLang4U/
 │   │       └── hybrid_cache/hybrid_pool_assembler.py
 │   ├── DESIGN.md
 │   └── RUN_INFERENCE.md
+├── compose/
+│   ├── docker-compose.engine.yml   # Engine-only stack
+│   ├── docker-compose.gateway.yml  # Gateway-only stack
+│   └── docker-compose.full.yml     # Full engine + gateway stack
+├── gateway/                        # API compatibility gateway
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── lna_agent_gateway/
+│       ├── app.py                  # FastAPI gateway (Anthropic/OpenAI/Responses)
+│       ├── config.py
+│       └── model_registry.py
+├── integrations/
+│   ├── claude-code/                # Claude Code setup guide
+│   ├── codex/                      # Codex setup guide
+│   ├── openclaw/                   # OpenClaw setup guide
+│   └── hermes-agent/               # Hermes Agent setup guide
+├── Makefile                        # Build, start, smoke-test targets
 ├── scripts/
-│   └── anthropic_proxy.py          # Anthropic ↔ OpenAI translation proxy
+│   └── anthropic_proxy.py          # Legacy Anthropic proxy (replaced by gateway)
 ├── benchmarks/                     # Benchmark data and scripts
 │   ├── README.md
 │   ├── results/                    # Raw CSV data

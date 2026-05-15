@@ -1,0 +1,9 @@
+model = "deepseek-v4-flash"
+model_provider = "lnalang4u"
+
+[model_providers.lnalang4u]
+name = "LnaLang4U Gateway"
+base_url = "http://127.0.0.1:9010/v1"
+env_key = "LNA_API_KEY"
+wire_api = "responses"
+stream_idle_timeout_ms = 300000

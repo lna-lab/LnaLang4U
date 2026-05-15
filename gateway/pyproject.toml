@@ -1,0 +1,18 @@
+[project]
+name = "lna-agent-gateway"
+version = "0.1.0"
+description = "OpenAI / Anthropic compatibility gateway for LnaLang4U"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["lna_agent_gateway*"]

@@ -1,0 +1,16 @@
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    container_name: lnalang4u-gateway
+    ports:
+      - "9010:9010"
+    environment:
+      UPSTREAM_OPENAI_BASE_URL: "${UPSTREAM_URL:-http://host.docker.internal:9000/v1}"
+      UPSTREAM_API_KEY: "${UPSTREAM_KEY:-local-dev}"
+      LNA_GATEWAY_HOST: "0.0.0.0"
+      LNA_GATEWAY_PORT: "9010"
+      LNA_SERVED_MODEL: "${LNA_MODEL:-deepseek-v4-flash}"
+      LNA_CONTEXT_LENGTH: "${CONTEXT_LENGTH:-1048576}"
+      LNA_MODEL_ALIASES: "${LNA_ALIASES:-anthropic/deepseek-v4-flash=deepseek-v4-flash,claude-lnalang4u=deepseek-v4-flash,codex-lnalang4u=deepseek-v4-flash}"
