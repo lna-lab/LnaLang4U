@@ -72,6 +72,41 @@ CUDA Graphs are critical for production throughput. Without them, the overhead o
 
 ![TTFT range](docs/assets/ttft_range.svg)
 
+## API Compatibility
+
+The sglang server serves the **OpenAI-compatible** API natively on port 9000.
+
+For **Anthropic API** compatibility (`/v1/messages`), a translation proxy is included:
+
+```bash
+# Start the proxy alongside sglang
+python3 scripts/anthropic_proxy.py --port 9001 --target http://127.0.0.1:9000
+
+# Then use Anthropic client libraries:
+#   Claude Code: ANTHROPIC_BASE_URL=http://127.0.0.1:9001
+#   Python:      Anthropic(base_url="http://127.0.0.1:9001")
+```
+
+The proxy translates between Anthropic and OpenAI formats transparently, including streaming support.
+
+### Testing with curl
+
+OpenAI format (native):
+```bash
+curl -s http://127.0.0.1:9000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hello"}],"max_tokens":20}'
+```
+
+Anthropic format (via proxy):
+```bash
+curl -s http://127.0.0.1:9001/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: test" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hello"}],"max_tokens":20}'
+```
+
 ## Quick start
 
 ### Prerequisites
@@ -187,6 +222,8 @@ LnaLang4U/
 │   │       └── hybrid_cache/hybrid_pool_assembler.py
 │   ├── DESIGN.md
 │   └── RUN_INFERENCE.md
+├── scripts/
+│   └── anthropic_proxy.py          # Anthropic ↔ OpenAI translation proxy
 ├── benchmarks/                     # Benchmark data and scripts
 │   ├── README.md
 │   ├── results/                    # Raw CSV data
