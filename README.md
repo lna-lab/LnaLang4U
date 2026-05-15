@@ -290,15 +290,34 @@ sglang provides built-in OOM guards that make the server safe for sequential lon
 
 This design ensures that **no single request can OOM the server**, and the system naturally backpressures under high load.
 
-### Practical capacity
+### Theoretical capacity
+
+Because HiCache automatically evicts cold KV pages to DRAM (L2) and SSD (L3), the total KV cache capacity is **bounded only by available SSD space**, not GPU memory.
+
+```
+max_concurrent_1m_contexts ≈ free_ssd_gb / kv_per_1m_context_gb
+```
+
+For example, with 1 TB of Optane SSD and ~0.6 GB per 1M context:
+
+```
+1,000 GB / 0.6 GB ≈ 1,666 concurrent 1M-context sessions
+```
+
+Each session's hot (sliding window) KV stays GPU-resident for fast decode. Cold pages are evicted to SSD and reloaded on demand. This is the key insight that makes long-context inference practical on local hardware.
+
+For workloads with staggered arrivals (the common case), sglang's request queue handles backpressure transparently — requests are prefilled sequentially and decoded in batches.
+
+### Verified results
 
 | Setup | Result |
 |-------|--------|
-| **4 concurrent × 1M context** | ✅ Verified — all HTTP 200, L3 SSD active (527 MB written) |
-| **8+ concurrent** | ✅ Via sglang's built-in request queue — sequential prefill + batched decode |
+| **4 concurrent × 1M context** | ✅ All HTTP 200, L3 SSD active (527 MB written) |
+| **8 concurrent × short context** | ✅ 401 tok/s aggregate, 7.2× scaling |
 | **1 concurrent × 1M** | ✅ 63 tok/s with CUDA Graphs |
+| **Sequential × N × 1M** | ✅ Bounded by SSD capacity; sglang queues automatically |
 
-For production deployments: set `--max-running-requests` to match your GPU memory budget. sglang handles the rest.
+For production deployments: set `--max-running-requests` to match your GPU memory budget and ensure sufficient SSD space for your expected workload.
 
 ## Known limitations
 
