@@ -22,18 +22,28 @@ UPSTREAM_HEADERS = {
 }
 
 
+_client: httpx.AsyncClient = None
+
+
+async def get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=300.0)
+    return _client
+
+
 async def proxy_to_upstream(payload: dict, stream: bool = False):
     """Forward request to SGLang upstream."""
     url = f"{settings.upstream_base_url}/chat/completions"
     if stream:
         payload["stream"] = True
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        if stream:
-            resp = await client.post(url, json=payload, headers=UPSTREAM_HEADERS)
-            return resp
-        else:
-            resp = await client.post(url, json=payload, headers=UPSTREAM_HEADERS)
-            return resp
+    client = await get_client()
+    if stream:
+        resp = await client.post(url, json=payload, headers=UPSTREAM_HEADERS)
+        return resp
+    else:
+        resp = await client.post(url, json=payload, headers=UPSTREAM_HEADERS)
+        return resp
 
 
 def resolve_model(model: Optional[str]) -> str:
@@ -47,9 +57,9 @@ def resolve_model(model: Optional[str]) -> str:
 @app.get("/health")
 async def health():
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.get(f"{settings.upstream_base_url}/models")
-            upstream_ok = r.status_code == 200
+        client = await get_client()
+        r = await client.get(f"{settings.upstream_base_url}/models")
+        upstream_ok = r.status_code == 200
     except Exception:
         upstream_ok = False
     return {
