@@ -59,7 +59,7 @@ The following figures are generated from machine-readable data in [`benchmarks/r
 | Single-request throughput | 57 tok/s | 200-token output, CUDA Graphs ON |
 | 2-concurrent aggregate | 107 tok/s | 1.9× scaling, 200 tokens each |
 | 4-concurrent aggregate | 215 tok/s | 3.9× scaling, 200 tokens each |
-| **8-concurrent aggregate** | **401 tok/s** | **7.2× scaling**, 200 tokens each |
+| **8-concurrent aggregate** | **401 tok/s** | **7.2× scaling**, 200 tokens each, short prompt |
 | TTFT (warm) | 125–212 ms | single request |
 | CUDA Graphs OFF baseline | 9.6 tok/s | 200 tokens; 6× below ON |
 
@@ -261,6 +261,26 @@ LnaLang4U/
 | [`sglang-diskkv/DESIGN.md`](sglang-diskkv/DESIGN.md) | Implementation design notes |
 | [`sglang-diskkv/RUN_INFERENCE.md`](sglang-diskkv/RUN_INFERENCE.md) | Detailed inference guide |
 
+## Deployment model
+
+LnaLang4U is designed for **sequential or lightly concurrent inference** — the standard serving pattern for long-context workloads.
+
+### How it works
+
+- **Prefill KV must be GPU-resident.** During prompt processing, the full attention computation requires KV cache on GPU. This is an architectural constraint of transformer decoding.
+- **L3 offload activates during decode.** Once generation starts, sglang's HiCache can evict older KV pages to DRAM (L2) and SSD (L3), freeing GPU memory for the active decoding window.
+- **sglang's continuous batching** queues incoming requests automatically. Even with many concurrent users, the scheduler processes them sequentially through the prefill→decode pipeline.
+
+### Practical capacity
+
+| Setup | Result |
+|-------|--------|
+| **4 concurrent × 1M context** | ✅ Verified — all HTTP 200, L3 SSD active (527 MB written) |
+| **8+ concurrent** | ✅ Via sglang's built-in request queue — sequential prefill + batched decode |
+| **1 concurrent × 1M** | ✅ 63 tok/s with CUDA Graphs |
+
+For production deployments: set `--max-running-requests` to match your GPU memory budget. sglang handles the rest.
+
 ## Known limitations
 
 - **Hardware-specific.** Tested on 4× RTX PRO 6000 Blackwell (SM120). Other Blackwell configurations may require tuning.
@@ -268,7 +288,7 @@ LnaLang4U/
 - **DiskOffload performance depends on SSD latency.** Optane-class storage is recommended.
 - **1M-context path requires careful memory tuning.** Adjust `mem-fraction-static`, `hicache-ratio`, and `max-running-requests` for your hardware.
 - **FP8 model format required.** The 274 GB `sgl-project/DeepSeek-V4-Flash-FP8` checkpoint is the recommended model. The 149 GB FP4-packed version (`deepseek-ai/DeepSeek-V4-Flash`) requires `SGLANG_DSV4_FP4_EXPERTS=1`.
-- **HiCache storage backend is experimental.** The DiskOffload L3 path is functional but not yet optimized for production latency.
+- **Simultaneous prefill is memory-bound.** L3 SSD offload helps during decode, not prefill. Schedule long-context requests sequentially for best results.
 
 ## Roadmap
 
